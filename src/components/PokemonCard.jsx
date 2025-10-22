@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   Star, Trash2, Zap, Heart, Shield,
   Circle, Flame, Droplet, Leaf, Zap as ZapBolt, Snowflake, Bug,
@@ -42,40 +43,75 @@ export default function PokemonCard({
   onUse,
   onToggleFav,
   onDelete,
-  onHeal,              // <— NUEVO: callback opcional para curar
+  onHeal,
   isFavorite = false
 }) {
   const { id, name, sprite, types = [], stats } = pokemon;
 
-  // === CURAS ===
-  const healsTotal = pokemon.healsTotal ?? 2;           // <— por defecto 2 curas
+  const healsTotal = pokemon.healsTotal ?? 2;
   const healsUsed  = pokemon.healsUsed  ?? 0;
   const healsLeft  = Math.max(0, healsTotal - healsUsed);
 
-  // === VIDA / DAÑO ===
   const hpNow   = pokemon.hp ?? stats.hpMax;
   const hpPct   = Math.round((hpNow / stats.hpMax) * 100);
-  const dmgTaken = Math.max(0, stats.hpMax - hpNow);
+  const totalLost = Math.max(0, stats.hpMax - hpNow);
 
-  // === ATAQUES ===
-  // Prioriza pokemon.attacks (ya normalizados) y sino toma los nombres de pokemon.moves
-  // mostrando los primeros 4.
-  const rawAttacks = Array.isArray(pokemon.attacks) && pokemon.attacks.length > 0
-    ? pokemon.attacks
-    : (Array.isArray(pokemon.moves) ? pokemon.moves.map(m => (m.name || m)).slice(0,4) : []);
+  const prevHpRef = useRef(hpNow);
+  const [justHealed, setJustHealed] = useState(false);
+  const [delta, setDelta] = useState(0);
+
+  useEffect(() => {
+    const prev = prevHpRef.current;
+    if (hpNow < prev) {
+      setDelta(hpNow - prev);
+      setJustHealed(false);
+      const t = setTimeout(() => setDelta(0), 450);
+      prevHpRef.current = hpNow;
+      return () => clearTimeout(t);
+    }
+    if (hpNow > prev) {
+      setDelta(hpNow - prev);
+      setJustHealed(true);
+      const t1 = setTimeout(() => setJustHealed(false), 450);
+      const t2 = setTimeout(() => setDelta(0), 450);
+      prevHpRef.current = hpNow;
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+    prevHpRef.current = hpNow;
+  }, [hpNow]);
+
+  const rawAttacks =
+    (Array.isArray(pokemon.attacks) && pokemon.attacks.length > 0)
+      ? pokemon.attacks
+      : (Array.isArray(pokemon.moves)
+          ? pokemon.moves.map(m => m?.move?.name ?? m?.name ?? m).filter(Boolean).slice(0,4)
+          : []);
 
   const attacks = rawAttacks
     .filter(Boolean)
     .slice(0,4)
-    .map(a => typeof a === 'string' ? { name: a } : a); // soporta {name, type} o solo name
+    .map(a => (typeof a === "string" ? { name: a } : a));
 
   const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
+  const lastDamageTaken = delta < 0 ? Math.abs(delta) : 0;
+  const damageBoxValue = lastDamageTaken || totalLost;
+
+
+  const canHeal = healsLeft > 0 && hpNow < stats.hpMax;
+
   return (
-    <div className="group relative rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-sm p-4 shadow-xl hover:shadow-2xl hover:border-slate-600/80 transition-all duration-300 hover:scale-[1.02]">
+    <div className={`group relative rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-sm p-4 shadow-xl hover:shadow-2xl hover:border-slate-600/80 transition-all duration-300 hover:scale-[1.02] ${lastDamageTaken ? "animate-hit" : ""}`}>
+      <style>{`
+        @keyframes hit-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+        .animate-hit{animation:hit-shake .35s ease-in-out}
+        @keyframes float-up{0%{opacity:0;transform:translateY(6px) scale(.98)}15%{opacity:1}100%{opacity:0;transform:translateY(-8px) scale(1)}}
+        .badge-float{animation:float-up .45s ease-out both}
+        .heal-pulse{box-shadow:0 0 0 2px rgba(16,185,129,.25),0 0 18px -6px rgba(16,185,129,.5)}
+      `}</style>
+
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/0 to-white/0 group-hover:from-white/5 group-hover:to-transparent transition-all duration-300 pointer-events-none" />
 
-      {/* Header: nombre, tipos y acciones */}
       <div className="relative flex items-start justify-between mb-3">
         <div>
           <h3 className="text-xl font-bold text-white mb-1 tracking-tight">{cap(name)}</h3>
@@ -90,10 +126,7 @@ export default function PokemonCard({
           <button
             onClick={onToggleFav}
             title="Favorito"
-            className={`h-9 w-9 grid place-content-center rounded-xl transition-all duration-200
-              ${isFavorite
-                ? "bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-lg shadow-yellow-500/30 scale-100"
-                : "bg-slate-800/60 border border-slate-700/60 text-slate-400 hover:text-yellow-400 hover:border-yellow-400/40 hover:scale-110"}`}
+            className={`h-9 w-9 grid place-content-center rounded-xl transition-all duration-200 ${isFavorite ? "bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-lg shadow-yellow-500/30 scale-100" : "bg-slate-800/60 border border-slate-700/60 text-slate-400 hover:text-yellow-400 hover:border-yellow-400/40 hover:scale-110"}`}
           >
             <Star className="h-4.5 w-4.5" fill={isFavorite ? "currentColor" : "none"} strokeWidth={2} />
           </button>
@@ -107,17 +140,23 @@ export default function PokemonCard({
         </div>
       </div>
 
-      {/* Sprite */}
-      <div className="relative my-4 mx-auto h-32 w-32 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-slate-700/40 grid place-content-center overflow-hidden shadow-inner group-hover:border-slate-600/60 transition-colors">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
+      <div className={`relative my-4 mx-auto h-32 w-32 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-slate-700/40 grid place-content-center overflow-hidden shadow-inner group-hover:border-slate-600/60 transition-colors ${justHealed ? "heal-pulse" : ""}`}>
+        {delta < 0 && <div className="absolute inset-0 bg-rose-500/20 mix-blend-screen" />}
+        {delta > 0 && <div className="absolute inset-0 bg-emerald-400/15 mix-blend-screen" />}
+
         {sprite ? (
           <img src={sprite} alt={name} className="relative h-28 w-28 object-contain drop-shadow-lg" />
         ) : (
           <div className="text-slate-600 text-xs font-medium">Sin imagen</div>
         )}
+
+        {delta !== 0 && (
+          <div className={`absolute -top-2 -right-2 px-2 py-0.5 rounded-md text-xs font-bold badge-float ${delta < 0 ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"}`}>
+            {delta < 0 ? `-${Math.abs(delta)}` : `+${delta}`}
+          </div>
+        )}
       </div>
 
-      {/* HP */}
       <div className="mb-3 space-y-2">
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-300 font-medium">HP</span>
@@ -125,20 +164,20 @@ export default function PokemonCard({
             {hpNow} / {stats.hpMax}
           </span>
         </div>
-        <div className="relative h-3 w-full rounded-full bg-slate-900/80 border border-slate-700/40 overflow-hidden shadow-inner">
+        <div className={`relative h-3 w-full rounded-full bg-slate-900/80 border border-slate-700/40 overflow-hidden shadow-inner ${justHealed ? "heal-pulse" : ""}`}>
           <div
-            className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 shadow-lg
-              ${hpPct > 50 
-                ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-emerald-500/50" 
-                : hpPct > 20 
-                ? "bg-gradient-to-r from-amber-500 to-amber-400 shadow-amber-500/50" 
-                : "bg-gradient-to-r from-rose-500 to-rose-400 shadow-rose-500/50"}`}
+            className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 shadow-lg ${
+              hpPct > 50
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-emerald-500/50"
+                : hpPct > 20
+                ? "bg-gradient-to-r from-amber-500 to-amber-400 shadow-amber-500/50"
+                : "bg-gradient-to-r from-rose-500 to-rose-400 shadow-rose-500/50"
+            }`}
             style={{ width: `${Math.max(0, Math.min(100, hpPct))}%` }}
           />
         </div>
       </div>
 
-      {/* Stats rápidos */}
       <div className="mb-4 grid grid-cols-3 gap-3">
         <div className="flex flex-col items-center justify-center bg-slate-900/40 rounded-xl py-2.5 border border-slate-700/30">
           <Zap className="h-5 w-5 text-amber-400 mb-1" strokeWidth={2.5} />
@@ -147,8 +186,12 @@ export default function PokemonCard({
         </div>
         <div className="flex flex-col items-center justify-center bg-slate-900/40 rounded-xl py-2.5 border border-slate-700/30">
           <Shield className="h-5 w-5 text-rose-400 mb-1" strokeWidth={2.5} />
-          <span className="text-xs text-slate-400 mb-0.5">Daño</span>
-          <span className="text-lg font-bold text-white">{dmgTaken}</span>
+          <span className="text-xs text-slate-400 mb-0.5">
+            {lastDamageTaken ? "Daño (últ)" : "Daño"}
+          </span>
+          <span className="text-lg font-bold text-white">
+            {damageBoxValue}
+          </span>
         </div>
         <div className="flex flex-col items-center justify-center bg-slate-900/40 rounded-xl py-2.5 border border-slate-700/30">
           <Heart className="h-5 w-5 text-pink-400 mb-1" strokeWidth={2.5} />
@@ -157,7 +200,6 @@ export default function PokemonCard({
         </div>
       </div>
 
-      {/* ATAQUES */}
       <div className="mb-4">
         <h4 className="text-sm font-semibold text-slate-300 mb-2">Ataques</h4>
         {attacks.length ? (
@@ -182,7 +224,6 @@ export default function PokemonCard({
         )}
       </div>
 
-      {/* ACCIONES */}
       <div className="space-y-2">
         {onUse && (
           <button
@@ -194,14 +235,17 @@ export default function PokemonCard({
         )}
 
         <button
-          onClick={() => { if (onHeal && healsLeft > 0) onHeal(id); }}
-          disabled={healsLeft === 0}
-          className={`w-full rounded-xl font-medium py-3 text-sm transition
-            ${healsLeft === 0
+          onClick={() => { if (onHeal && canHeal) onHeal(id); }}
+          disabled={!canHeal}
+          title={!canHeal ? (healsLeft === 0 ? "Sin curas" : "Vida completa") : "Curar"}
+          className={`w-full rounded-xl font-medium py-3 text-sm transition ${
+            !canHeal
               ? "bg-slate-800/40 border border-slate-700/50 text-slate-500 cursor-not-allowed"
-              : "bg-emerald-600/90 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"}`}
+              : "bg-emerald-600/90 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+          }`}
         >
-          + Curar {healsLeft > 0 ? `(${healsLeft} restantes)` : ""}
+          {canHeal ? "+ Curar" : healsLeft === 0 ? "Sin curas" : "Vida completa"}
+          {canHeal && healsLeft > 0 ? ` (${healsLeft} restantes)` : ""}
         </button>
       </div>
     </div>

@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react";
-import { state, subscribe, setActive, toggleFavorite, deleteFromBag } from "../store/gameStore";
+import {
+  state,
+  subscribe,
+  setActive,
+  toggleFavorite,
+  deleteFromBag,
+  healPokemon,
+} from "../store/gameStore";
 import PokemonCard from "./PokemonCard";
 
 export default function UnitsGrid() {
   const [, setTick] = useState(0);
   useEffect(() => subscribe(() => setTick((x) => x + 1)), []);
 
-
   const bagSorted = [...state.bag].sort(
-    (a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || a.name.localeCompare(b.name)
+    (a, b) =>
+      (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) ||
+      a.name.localeCompare(b.name)
   );
 
   if (!bagSorted.length) {
@@ -26,6 +34,7 @@ export default function UnitsGrid() {
           key={p.id}
           pokemon={p}
           onUse={() => setActive(p.id)}
+          onHeal={() => healPokemon(p.id, 30)}
           onToggleFav={() => toggleFavorite(p.id)}
           onDelete={() => deleteFromBag(p.id)}
           isFavorite={!!p.favorite}
