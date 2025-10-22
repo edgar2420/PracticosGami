@@ -9,7 +9,6 @@ export default function BattleArea() {
 
   return (
     <div className="flex flex-col md:flex-row justify-between items-stretch gap-4">
-      {/* Jugador */}
       <div className="flex-1 rounded-xl border border-slate-700 bg-slate-800/50 p-4 shadow">
         <h3 className="text-lg font-semibold text-blue-400 mb-2">Jugador</h3>
         {active ? (
@@ -58,7 +57,6 @@ export default function BattleArea() {
         )}
       </div>
 
-      {/* Pokémon Salvaje */}
       <div className="flex-1 rounded-xl border border-slate-700 bg-slate-800/50 p-4 shadow">
         <h3 className="text-lg font-semibold text-red-400 mb-2">Salvaje</h3>
         {wild ? (

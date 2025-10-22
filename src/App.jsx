@@ -1,12 +1,10 @@
-import './App.css'
 import GamePage from './pages/GamePage'
+import './index.css'
 
-function App() {
+export default function App() {
   return (
-    <div className="app-container">
+    <div className="min-h-screen">
       <GamePage />
     </div>
   )
 }
-
-export default App
